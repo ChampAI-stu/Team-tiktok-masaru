@@ -165,3 +165,31 @@ function scanWorkbook(wb) {
     rows: (XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, blankrows: false }) || []).length
   }));
 }
+
+/* ---------- ลายนิ้วมือแถว (กันข้อมูลซ้ำ) ----------
+   คิดจากค่าทุกช่องที่อ่านได้ + ชนิดข้อมูล
+   ไม่รวมชื่อไฟล์/ชีท → อัปไฟล์เดิมซ้ำ หรืออัปไฟล์ใหม่ที่มีแถวเดิมปนมา ก็จับได้ */
+function rowHash(kind, o) {
+  const s = kind + '|' + Object.keys(o).sort()
+    .map(k => k + '=' + String(o[k] ?? '').trim()).join('|');
+  let h1 = 0x811c9dc5, h2 = 0x01000193;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
+    h2 = Math.imul(h2 + c, 0x85ebca6b) >>> 0;
+  }
+  return h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0') + '-' + s.length.toString(36);
+}
+
+/* ตัดแถวซ้ำภายในไฟล์เดียวกัน คืน { rows, dupInFile } */
+function dedupeRows(kind, rows) {
+  const seen = new Set(), out = [];
+  let dupInFile = 0;
+  for (const r of rows) {
+    const h = rowHash(kind, r);
+    if (seen.has(h)) { dupInFile++; continue; }
+    seen.add(h);
+    out.push({ ...r, row_hash: h });
+  }
+  return { rows: out, dupInFile };
+}
