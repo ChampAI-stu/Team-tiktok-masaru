@@ -33,6 +33,16 @@
       </div>
       <input type="file" id="file" accept=".xlsx,.xls,.csv" class="hide">
       <div id="sheets" style="margin-top:14px"></div>
+      <div id="modeBox" class="hide" style="margin-top:12px">
+        <label class="f">โหมดนำเข้า</label>
+        <select id="mode">
+          <option value="append">เพิ่มข้อมูล — ข้ามแถวที่ซ้ำของเดิมอัตโนมัติ</option>
+          <option value="replace">แทนที่ — ลบข้อมูลเดิมในช่วงวันที่ของไฟล์นี้ก่อน แล้วใส่ใหม่</option>
+        </select>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:4px" id="modeHint">
+          ปลอดภัยสำหรับอัปเพิ่มระหว่างเดือน — อัปไฟล์เดิมซ้ำกี่รอบยอดก็ไม่เบิ้ล
+        </div>
+      </div>
       <div id="actions" class="hide" style="margin-top:12px;display:flex;gap:9px">
         <button class="btn" id="btnPre">ตรวจข้อมูลก่อนนำเข้า</button>
         <button class="btn gold hide" id="btnImp">ยืนยันนำเข้า</button>
@@ -84,6 +94,9 @@ let WB = null, FILE = '', PARSED = [];
     if(e.dataTransfer.files[0]) readFile(e.dataTransfer.files[0]); };
   $('file').onchange = e => e.target.files[0] && readFile(e.target.files[0]);
   $('btnPre').onclick = preview;
+  $('mode').onchange = e => { $('modeHint').textContent = e.target.value==='replace'
+    ? 'ใช้ตอนทีมแก้ตัวเลขย้อนหลังแล้วส่งไฟล์ใหม่ — ข้อมูลเดิมในช่วงวันที่นั้นจะถูกลบทิ้งทั้งหมด'
+    : 'ปลอดภัยสำหรับอัปเพิ่มระหว่างเดือน — อัปไฟล์เดิมซ้ำกี่รอบยอดก็ไม่เบิ้ล'; };
   $('btnImp').onclick = doImport;
   await history();
 })();
@@ -106,6 +119,7 @@ function readFile(f){
         </select>
       </div>`).join('');
     $('actions').classList.remove('hide');
+    $('modeBox').classList.remove('hide');
     $('btnImp').classList.add('hide');
     $('preview').innerHTML = '<div class="empty">กด “ตรวจข้อมูลก่อนนำเข้า”</div>';
     toast('อ่านไฟล์แล้ว '+sc.length+' ชีท','ok');
@@ -121,10 +135,33 @@ function preview(){
     if(!cb.checked || !kind) return;
     const name = cb.dataset.name;
     const year = new Date().getFullYear();
-    PARSED.push(parseSheet(WB, name, kind, { year }));
+    const p = parseSheet(WB, name, kind, { year });
+    if(p.ok){
+      const d = dedupeRows(kind, p.rows);
+      p.rows = d.rows; p.dupInFile = d.dupInFile;
+      const dateField = kind==='sales'?'order_date':kind==='expense'?'exp_date':'ad_date';
+      const dates = p.rows.map(r=>r[dateField]).filter(Boolean).sort();
+      p.dateMin = dates[0]; p.dateMax = dates[dates.length-1];
+    }
+    PARSED.push(p);
   });
   if(!PARSED.length){ $('preview').innerHTML='<div class="empty">ยังไม่ได้เลือกชีท</div>'; return; }
+  render();
+  checkExisting();
+}
 
+async function checkExisting(){
+  const { data } = await sb.from('tt_imports').select('file_name,sheet_name,created_at')
+    .eq('file_name', FILE).limit(20);
+  if(!data || !data.length) return;
+  const hit = PARSED.filter(p=>p.ok && data.some(d=>d.sheet_name===p.sheet));
+  if(!hit.length) return;
+  $('preview').insertAdjacentHTML('afterbegin',
+    `<div class="note" style="margin-bottom:12px">🔁 ไฟล์ชื่อนี้เคยนำเข้าแล้ว (${hit.map(h=>esc(h.sheet)).join(', ')}) —
+     กดต่อได้ปลอดภัย โหมด “เพิ่มข้อมูล” จะข้ามแถวที่ซ้ำให้เอง</div>`);
+}
+
+function render(){
   $('preview').innerHTML = PARSED.map(p=>{
     if(!p.ok) return `<div class="note red" style="margin-bottom:11px">❌ <b>${esc(p.sheet)}</b> — ${esc(p.error)}</div>`;
     const miss = (p.missing||[]).length ? `<div class="note" style="margin:8px 0">⚠️ ไม่พบคอลัมน์: ${p.missing.join(', ')}</div>` : '';
@@ -133,6 +170,10 @@ function preview(){
     return `<div style="margin-bottom:18px">
       <b>📄 ${esc(p.sheet)}</b> <span class="badge b-info">${({sales:'ยอดขาย',expense:'ค่าใช้จ่าย',ads:'ค่าแอด'})[p.kind]}</span>
       <span style="color:var(--muted);font-size:13px"> — อ่านได้ ${fmtN(p.rows.length)} แถว · ข้าม ${fmtN(p.skipped.length)} แถว · หัวตารางแถวที่ ${p.headerRow}</span>
+      <div style="font-size:12.5px;color:var(--muted);margin-top:3px">
+        ช่วงวันที่ในไฟล์: ${p.dateMin?thDate(p.dateMin):'-'} – ${p.dateMax?thDate(p.dateMax):'-'}
+        ${p.dupInFile?` · <span style="color:var(--warn)">พบแถวซ้ำกันเองในไฟล์ ${fmtN(p.dupInFile)} แถว (ตัดออกแล้ว)</span>`:''}
+      </div>
       ${miss}
       ${p.skipped.length?`<div style="font-size:12px;color:var(--muted);margin:5px 0">ข้าม: ${p.skipped.slice(0,5).map(s=>'แถว '+s.row+' ('+s.reason+')').join(', ')}${p.skipped.length>5?' …':''}</div>`:''}
       ${rows.length?`<div class="tbl-wrap" style="margin-top:7px"><table><thead><tr>${head.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead>
@@ -146,22 +187,49 @@ function preview(){
 
 async function doImport(){
   if(!isHead()) return toast('ไม่มีสิทธิ์นำเข้าข้อมูล','err');
+  const mode = $('mode').value;
+  const sets = PARSED.filter(x=>x.ok && x.rows.length);
+
+  if(mode === 'replace'){
+    const txt = sets.map(p=>`\u2022 ${p.sheet}: ลบข้อมูลเดิม ${thDate(p.dateMin)} – ${thDate(p.dateMax)}`).join('\n');
+    if(!confirm('โหมดแทนที่ — จะลบข้อมูลเดิมในช่วงนี้ทิ้งก่อน:\n\n'+txt+'\n\nยืนยันหรือไม่?')) return;
+  }
+
   $('btnImp').disabled = true;
-  let ok = 0;
-  for(const p of PARSED.filter(x=>x.ok && x.rows.length)){
+  let inserted = 0, dup = 0, deleted = 0;
+  const DATEF = { sales:'order_date', expense:'exp_date', ads:'ad_date' };
+
+  for(const p of sets){
     const table = { sales:'tt_sales', expense:'tt_expense', ads:'tt_ads' }[p.kind];
     const rows = p.rows.map(r=>({ ...r, source_file: FILE + ' / ' + p.sheet }));
-    for(let i=0;i<rows.length;i+=500){
-      const { error } = await sb.from(table).insert(rows.slice(i,i+500));
-      if(error){ toast('นำเข้าไม่สำเร็จ: '+error.message,'err'); $('btnImp').disabled=false; return; }
+
+    if(mode === 'replace' && p.dateMin && p.dateMax){
+      const { data:del, error:e1 } = await sb.from(table).delete()
+        .gte(DATEF[p.kind], p.dateMin).lte(DATEF[p.kind], p.dateMax).select('id');
+      if(e1){ toast('ลบข้อมูลเดิมไม่สำเร็จ: '+e1.message,'err'); $('btnImp').disabled=false; return; }
+      deleted += (del||[]).length;
     }
+
+    for(let i=0;i<rows.length;i+=500){
+      const chunk = rows.slice(i,i+500);
+      const { data, error } = await sb.from(table)
+        .upsert(chunk, { onConflict:'row_hash', ignoreDuplicates:true })
+        .select('id');
+      if(error){ toast('นำเข้าไม่สำเร็จ: '+error.message,'err'); $('btnImp').disabled=false; return; }
+      inserted += (data||[]).length;
+      dup += chunk.length - (data||[]).length;
+    }
+
     await sb.from('tt_imports').insert({ kind:p.kind, file_name:FILE, sheet_name:p.sheet,
-      rows:rows.length, imported_by: ME.name });
-    ok += rows.length;
+      rows: rows.length, imported_by: ME.name, mode, dup_skipped: dup });
   }
+
   cacheClear();
   $('btnImp').disabled = false;
-  toast('นำเข้าสำเร็จ '+fmtN(ok)+' แถว','ok');
+  $('preview').insertAdjacentHTML('afterbegin', `<div class="note blue" style="margin-bottom:12px">
+    \u2705 <b>นำเข้าเสร็จ</b> — เพิ่มใหม่ ${fmtN(inserted)} แถว ·
+    ข้ามเพราะซ้ำของเดิม ${fmtN(dup)} แถว${mode==='replace'?` · ลบของเดิมออก ${fmtN(deleted)} แถว`:''}</div>`);
+  toast(`นำเข้าสำเร็จ ${fmtN(inserted)} แถว (ข้ามซ้ำ ${fmtN(dup)})`,'ok');
   await history();
 }
 
@@ -172,7 +240,10 @@ async function history(){
     { t:'เวลา', k:'created_at', r:r=>thDate(r.created_at)+' '+new Date(r.created_at).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}) },
     { t:'ชนิด', k:'kind', r:r=>`<span class="badge b-info">${({sales:'ยอดขาย',expense:'ค่าใช้จ่าย',ads:'ค่าแอด'})[r.kind]||r.kind}</span>` },
     { t:'ไฟล์', k:'file_name' }, { t:'ชีท', k:'sheet_name' },
-    { t:'แถว', k:'rows', num:1, r:r=>fmtN(r.rows) }, { t:'ผู้นำเข้า', k:'imported_by' }
+    { t:'แถว', k:'rows', num:1, r:r=>fmtN(r.rows) },
+    { t:'โหมด', k:'mode', r:r=>r.mode==='replace'?'<span class="badge b-warn">แทนที่</span>':'<span class="badge b-ok">เพิ่ม</span>' },
+    { t:'ข้ามซ้ำ', k:'dup_skipped', num:1, r:r=>fmtN(r.dup_skipped||0) },
+    { t:'ผู้นำเข้า', k:'imported_by' }
   ], rows);
 }
 </script>
