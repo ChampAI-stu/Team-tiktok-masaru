@@ -1,0 +1,94 @@
+/* MASARU TikTok Portal — shared theme */
+@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap');
+
+:root{
+  --navy:#1F3864; --navy-2:#16294a; --blue:#2E75B6; --gold:#C9A84C;
+  --ink:#1c2434; --muted:#6b7280; --line:#e3e8ef; --bg:#f4f6fa; --card:#fff;
+  --ok:#16a34a; --warn:#d97706; --bad:#dc2626;
+  --tt:#010101; --tt-pink:#FE2C55; --tt-cyan:#25F4EE;
+  --r:14px; --sh:0 1px 2px rgba(16,24,40,.06),0 8px 24px rgba(16,24,40,.06);
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:'Sarabun',Tahoma,sans-serif;background:var(--bg);color:var(--ink);font-size:15px}
+a{color:inherit;text-decoration:none}
+.hide{display:none !important}
+
+/* ---------- top bar ---------- */
+.top{background:linear-gradient(100deg,var(--navy),var(--navy-2));color:#fff;position:sticky;top:0;z-index:40}
+.top-in{max-width:1280px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:14px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.2px}
+.brand .dot{width:26px;height:26px;border-radius:8px;background:var(--tt-pink);
+  box-shadow:-3px 0 0 var(--tt-cyan);display:grid;place-items:center;font-size:13px}
+.brand small{display:block;font-weight:400;font-size:11px;opacity:.75;letter-spacing:.4px}
+.nav{display:flex;gap:2px;margin-left:auto;flex-wrap:wrap}
+.nav a{padding:7px 13px;border-radius:9px;font-size:14px;opacity:.85}
+.nav a:hover{background:rgba(255,255,255,.1);opacity:1}
+.nav a.on{background:rgba(255,255,255,.16);opacity:1;font-weight:600}
+.who{display:flex;align-items:center;gap:8px;font-size:13px;opacity:.9}
+.chip-role{background:var(--gold);color:#3a2c00;border-radius:999px;padding:1px 9px;font-size:11px;font-weight:700}
+.icon-btn{background:rgba(255,255,255,.12);border:0;color:#fff;border-radius:9px;padding:6px 10px;cursor:pointer;font-family:inherit;font-size:13px}
+.icon-btn:hover{background:rgba(255,255,255,.22)}
+
+/* ---------- layout ---------- */
+.wrap{max-width:1280px;margin:0 auto;padding:18px 16px 60px}
+.page-h{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin:4px 0 16px}
+.page-h h1{margin:0;font-size:22px}
+.page-h p{margin:0;color:var(--muted);font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);padding:16px}
+.card h3{margin:0 0 12px;font-size:15px;display:flex;align-items:center;gap:8px}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,1fr)} .g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)} .g6{grid-template-columns:repeat(6,1fr)}
+@media(max-width:1000px){.g4,.g6{grid-template-columns:repeat(2,1fr)}.g3,.g2{grid-template-columns:1fr}}
+@media(max-width:560px){.g4,.g6{grid-template-columns:1fr}}
+
+/* ---------- kpi ---------- */
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 15px;box-shadow:var(--sh);position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--blue)}
+.kpi.gold::before{background:var(--gold)} .kpi.ok::before{background:var(--ok)}
+.kpi.bad::before{background:var(--bad)} .kpi.pink::before{background:var(--tt-pink)}
+.kpi .l{font-size:12px;color:var(--muted)}
+.kpi .v{font-size:23px;font-weight:700;margin-top:3px;letter-spacing:-.3px}
+.kpi .s{font-size:11px;color:var(--muted);margin-top:2px}
+
+/* ---------- tabs ---------- */
+.tabs{display:flex;gap:4px;background:#e9edf5;padding:4px;border-radius:11px;overflow:auto;margin-bottom:14px}
+.tabs button{flex:0 0 auto;border:0;background:transparent;padding:8px 15px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:14px;color:#42506b;white-space:nowrap}
+.tabs button.on{background:#fff;color:var(--navy);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+
+/* ---------- form ---------- */
+label.f{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+input,select,textarea{font-family:inherit;font-size:14px;padding:8px 11px;border:1px solid var(--line);
+  border-radius:9px;background:#fff;color:var(--ink);width:100%}
+input:focus,select:focus,textarea:focus{outline:2px solid #cfe0f5;border-color:var(--blue)}
+.btn{background:var(--navy);color:#fff;border:0;border-radius:9px;padding:9px 16px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600}
+.btn:hover{background:var(--navy-2)} .btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.sec{background:#fff;color:var(--navy);border:1px solid var(--line)}
+.btn.gold{background:var(--gold);color:#3a2c00}
+.btn.sm{padding:5px 11px;font-size:13px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.row>div{flex:1;min-width:130px}
+
+/* ---------- table ---------- */
+.tbl-wrap{overflow:auto;border:1px solid var(--line);border-radius:11px;background:#fff}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{background:var(--navy);color:#fff;padding:9px 10px;text-align:left;font-weight:600;position:sticky;top:0;white-space:nowrap}
+td{padding:8px 10px;border-top:1px solid var(--line);white-space:nowrap}
+tbody tr:nth-child(even){background:#fafbfe}
+tbody tr:hover{background:#f0f5fc}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+tfoot td{font-weight:700;background:#fff7e6;border-top:2px solid var(--gold)}
+.badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:600}
+.b-ok{background:#dcfce7;color:#166534} .b-warn{background:#fef3c7;color:#92400e}
+.b-bad{background:#fee2e2;color:#991b1b} .b-info{background:#dbeafe;color:#1e40af}
+
+/* ---------- misc ---------- */
+.note{background:#fff8e6;border:1px solid #f0dca8;color:#7a5b00;border-radius:11px;padding:11px 13px;font-size:13px}
+.note.blue{background:#eef5fd;border-color:#c9dcf3;color:#1c3f6e}
+.note.red{background:#fef2f2;border-color:#f6cccc;color:#8a1f1f}
+.empty{padding:34px;text-align:center;color:var(--muted);font-size:14px}
+.spin{width:17px;height:17px;border:2.5px solid #dbe3f0;border-top-color:var(--blue);border-radius:50%;display:inline-block;animation:sp .7s linear infinite;vertical-align:-3px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.toast{position:fixed;right:16px;bottom:16px;background:var(--navy);color:#fff;padding:11px 16px;border-radius:11px;box-shadow:var(--sh);z-index:99;font-size:14px;max-width:340px}
+.toast.err{background:var(--bad)} .toast.ok{background:var(--ok)}
+.foot{text-align:center;color:var(--muted);font-size:11.5px;margin-top:28px}
