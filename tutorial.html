@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tutorial / Flow — MASARU TikTok</title>
+<link rel="stylesheet" href="assets/style.css">
+<style>
+.flow{border:1px solid var(--line);border-radius:13px;background:#fff;margin-bottom:12px;overflow:hidden;box-shadow:var(--sh)}
+.flow-h{display:flex;align-items:center;gap:11px;padding:13px 15px;cursor:pointer}
+.flow-h:hover{background:#f7f9fd}
+.flow-h .code{background:var(--navy);color:#fff;border-radius:7px;padding:2px 9px;font-size:11.5px;font-weight:700}
+.flow-h b{font-size:15px}.flow-h p{margin:2px 0 0;font-size:12.5px;color:var(--muted)}
+.flow-b{border-top:1px solid var(--line);padding:6px 15px 14px}
+.step{display:flex;gap:11px;padding:10px 0;border-bottom:1px dashed var(--line)}
+.step:last-child{border-bottom:0}
+.step .no{width:25px;height:25px;flex:0 0 25px;border-radius:50%;background:var(--blue);color:#fff;
+  display:grid;place-items:center;font-size:12.5px;font-weight:700}
+.step.done .no{background:var(--ok)}
+.step b{font-size:14px}.step p{margin:2px 0 0;font-size:13px;color:#4b5563}
+.meta{font-size:11.5px;color:var(--muted);margin-top:3px;display:flex;gap:12px;flex-wrap:wrap}
+.pg{margin-left:auto;text-align:right;font-size:12px;color:var(--muted);min-width:92px}
+.pg .bar{height:6px;background:#eef1f7;border-radius:6px;overflow:hidden;margin-top:4px}
+.pg .bar>i{display:block;height:100%;background:var(--ok)}
+.cat{font-size:13px;font-weight:700;color:var(--navy);margin:18px 0 8px}
+dialog{border:0;border-radius:15px;padding:0;box-shadow:0 24px 60px rgba(0,0,0,.3);max-width:560px;width:94%}
+dialog::backdrop{background:rgba(15,23,42,.55)}
+.dlg-h{background:var(--navy);color:#fff;padding:13px 17px;font-weight:600}
+.dlg-b{padding:17px;max-height:70vh;overflow:auto}
+.dlg-f{padding:13px 17px;border-top:1px solid var(--line);display:flex;gap:9px;justify-content:flex-end}
+</style>
+</head>
+<body>
+<header class="top" id="top"></header>
+<div class="wrap">
+  <div class="page-h">
+    <div><h1>📚 Tutorial / Flow การทำงาน</h1><p>ขั้นตอนมาตรฐานของทีม TikTok — ติ๊กเช็กลิสต์เพื่อบันทึกความคืบหน้าของตัวเอง</p></div>
+    <div style="margin-left:auto" class="row">
+      <div><label class="f">ค้นหา</label><input id="q" placeholder="ชื่อ flow / ขั้นตอน"></div>
+      <div style="flex:0" id="adminBox"></div>
+    </div>
+  </div>
+
+  <div class="note blue" style="margin-bottom:14px">
+    ℹ️ ตอนนี้เป็น <b>flow ตัวอย่าง</b> — เมื่อได้ลิสต์งานจริงจากทีมแล้ว หัวหน้าเพิ่ม/แก้ได้เองจากปุ่ม “+ เพิ่ม Flow”
+  </div>
+
+  <div id="body"><div class="empty"><span class="spin"></span> กำลังโหลด…</div></div>
+  <div class="foot">MASARU Group — TikTok Team Portal · เอกสารภายใน (ความลับ)</div>
+</div>
+
+<dialog id="dlg">
+  <div class="dlg-h" id="dlgTitle">เพิ่ม Flow</div>
+  <div class="dlg-b">
+    <div class="row" style="margin-bottom:10px">
+      <div><label class="f">หมวด</label><input id="fCat" placeholder="เช่น ยิงแอด / ไลฟ์"></div>
+      <div><label class="f">รหัส</label><input id="fCode" placeholder="ADS-02"></div>
+    </div>
+    <div style="margin-bottom:10px"><label class="f">ชื่อ Flow</label><input id="fTitle"></div>
+    <div style="margin-bottom:10px"><label class="f">คำอธิบายสั้น</label><input id="fSum"></div>
+    <div class="row" style="margin-bottom:14px">
+      <div><label class="f">ผู้รับผิดชอบ (ตำแหน่ง)</label><input id="fRole"></div>
+      <div><label class="f">ลำดับ</label><input id="fSort" type="number" value="0"></div>
+    </div>
+    <label class="f">ขั้นตอน — บรรทัดละ 1 ขั้น ใช้ <b>|</b> คั่น: ชื่อขั้นตอน | รายละเอียด | เครื่องมือ | ความถี่</label>
+    <textarea id="fSteps" rows="7" placeholder="เลือกสินค้าที่จะยิง | ดู ROAS เดือนก่อน | TikTok Ads | ทุกสัปดาห์"></textarea>
+  </div>
+  <div class="dlg-f">
+    <button class="btn sec" onclick="document.getElementById('dlg').close()">ยกเลิก</button>
+    <button class="btn" id="btnSave">บันทึก</button>
+  </div>
+</dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="assets/common.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let FLOWS = [], STEPS = [], DONE = new Set(), EDIT_ID = null, OPEN = new Set();
+
+(async function(){
+  if(!await requireAuth()) return;
+  renderTop('tutorial.html');
+  if(isHead()) $('adminBox').innerHTML = '<button class="btn gold" onclick="openDlg()">+ เพิ่ม Flow</button>';
+  $('q').oninput = render;
+  await loadAll();
+})();
+
+async function loadAll(){
+  const [f, s, p] = await Promise.all([
+    sb.from('tt_flow').select('*').eq('active',true).order('category').order('sort_no'),
+    sb.from('tt_flow_step').select('*').order('step_no'),
+    sb.from('tt_flow_progress').select('step_id').eq('user_id', ME.id)
+  ]);
+  if(f.error){ toast(f.error.message,'err'); return; }
+  FLOWS = f.data||[]; STEPS = s.data||[];
+  DONE = new Set((p.data||[]).map(x=>x.step_id));
+  render();
+}
+
+function render(){
+  const q = $('q').value.trim().toLowerCase();
+  const list = FLOWS.filter(f => {
+    if(!q) return true;
+    const st = STEPS.filter(s=>s.flow_id===f.id).map(s=>s.title+' '+(s.detail||'')).join(' ');
+    return (f.title+' '+(f.summary||'')+' '+(f.code||'')+' '+st).toLowerCase().includes(q);
+  });
+  if(!list.length){ $('body').innerHTML = '<div class="empty">ไม่พบ flow ที่ค้นหา</div>'; return; }
+
+  const cats = [...new Set(list.map(f=>f.category))];
+  $('body').innerHTML = cats.map(c => `<div class="cat">📂 ${esc(c)}</div>` +
+    list.filter(f=>f.category===c).map(f=>{
+      const st = STEPS.filter(s=>s.flow_id===f.id);
+      const done = st.filter(s=>DONE.has(s.id)).length;
+      const pct = st.length ? done/st.length*100 : 0;
+      const open = OPEN.has(f.id);
+      return `<div class="flow">
+        <div class="flow-h" onclick="toggle(${f.id})">
+          <span class="code">${esc(f.code||'-')}</span>
+          <div><b>${esc(f.title)}</b><p>${esc(f.summary||'')}${f.owner_role?' · ผู้รับผิดชอบ: '+esc(f.owner_role):''}</p></div>
+          <div class="pg">${done}/${st.length} ขั้นตอน<div class="bar"><i style="width:${pct}%"></i></div></div>
+          <span style="font-size:13px;color:var(--muted)">${open?'▲':'▼'}</span>
+        </div>
+        ${open ? `<div class="flow-b">
+          ${st.length ? st.map(s=>`
+            <div class="step ${DONE.has(s.id)?'done':''}">
+              <span class="no" onclick="tick(${s.id})" style="cursor:pointer" title="ติ๊กว่าทำแล้ว">${DONE.has(s.id)?'✓':s.step_no}</span>
+              <div style="flex:1"><b>${esc(s.title)}</b>
+                ${s.detail?`<p>${esc(s.detail)}</p>`:''}
+                <div class="meta">${s.tool?'🛠 '+esc(s.tool):''}${s.sla?'<span>⏱ '+esc(s.sla)+'</span>':''}</div>
+              </div>
+            </div>`).join('') : '<div class="empty">ยังไม่มีขั้นตอนใน flow นี้</div>'}
+          ${isHead()?`<div style="margin-top:11px;display:flex;gap:8px">
+            <button class="btn sec sm" onclick="event.stopPropagation();openDlg(${f.id})">✏️ แก้ไข</button>
+            <button class="btn sec sm" onclick="event.stopPropagation();delFlow(${f.id})">🗑 ลบ</button></div>`:''}
+        </div>` : ''}
+      </div>`;
+    }).join('')).join('');
+}
+
+function toggle(id){ OPEN.has(id) ? OPEN.delete(id) : OPEN.add(id); render(); }
+
+async function tick(stepId){
+  event.stopPropagation();
+  if(DONE.has(stepId)){
+    DONE.delete(stepId); render();
+    await sb.from('tt_flow_progress').delete().eq('user_id',ME.id).eq('step_id',stepId);
+  } else {
+    DONE.add(stepId); render();
+    const { error } = await sb.from('tt_flow_progress').insert({ user_id:ME.id, step_id:stepId });
+    if(error){ DONE.delete(stepId); render(); toast(error.message,'err'); }
+  }
+}
+
+function openDlg(id){
+  EDIT_ID = id || null;
+  $('dlgTitle').textContent = id ? 'แก้ไข Flow' : 'เพิ่ม Flow';
+  const f = id ? FLOWS.find(x=>x.id===id) : null;
+  $('fCat').value=f?.category||''; $('fCode').value=f?.code||''; $('fTitle').value=f?.title||'';
+  $('fSum').value=f?.summary||''; $('fRole').value=f?.owner_role||''; $('fSort').value=f?.sort_no??0;
+  $('fSteps').value = id ? STEPS.filter(s=>s.flow_id===id)
+    .map(s=>[s.title,s.detail||'',s.tool||'',s.sla||''].join(' | ')).join('\n') : '';
+  $('dlg').showModal();
+}
+
+$('btnSave').onclick = async () => {
+  const payload = { category:$('fCat').value.trim()||'ทั่วไป', code:$('fCode').value.trim()||null,
+    title:$('fTitle').value.trim(), summary:$('fSum').value.trim(),
+    owner_role:$('fRole').value.trim(), sort_no:+$('fSort').value||0, updated_at:new Date().toISOString() };
+  if(!payload.title) return toast('ใส่ชื่อ Flow ด้วย','err');
+  $('btnSave').disabled = true;
+  let flowId = EDIT_ID;
+  if(EDIT_ID){
+    const { error } = await sb.from('tt_flow').update(payload).eq('id',EDIT_ID);
+    if(error){ $('btnSave').disabled=false; return toast(error.message,'err'); }
+    await sb.from('tt_flow_step').delete().eq('flow_id',EDIT_ID);
+  } else {
+    const { data, error } = await sb.from('tt_flow').insert(payload).select().single();
+    if(error){ $('btnSave').disabled=false; return toast(error.message,'err'); }
+    flowId = data.id;
+  }
+  const steps = $('fSteps').value.split('\n').map(l=>l.trim()).filter(Boolean).map((l,i)=>{
+    const p = l.split('|').map(x=>x.trim());
+    return { flow_id:flowId, step_no:i+1, title:p[0], detail:p[1]||null, tool:p[2]||null, sla:p[3]||null };
+  });
+  if(steps.length){
+    const { error } = await sb.from('tt_flow_step').insert(steps);
+    if(error){ $('btnSave').disabled=false; return toast(error.message,'err'); }
+  }
+  $('btnSave').disabled = false;
+  $('dlg').close();
+  toast('บันทึกแล้ว','ok');
+  OPEN.add(flowId);
+  await loadAll();
+};
+
+async function delFlow(id){
+  if(!confirm('ลบ flow นี้ทั้งหมด?')) return;
+  const { error } = await sb.from('tt_flow').delete().eq('id',id);
+  if(error) return toast(error.message,'err');
+  toast('ลบแล้ว','ok'); await loadAll();
+}
+</script>
+</body>
+</html>

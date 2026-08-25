@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>วิเคราะห์ค่าแอด — MASARU TikTok</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="top" id="top"></header>
+<div class="wrap">
+  <div class="page-h">
+    <div><h1>📣 วิเคราะห์ค่าแอด</h1><p>ROAS · %ค่าแอด · CPO แยกรายคน / ประเภทแอด / แคมเปญ</p></div>
+    <div style="margin-left:auto" class="row">
+      <div><label class="f">ตั้งแต่</label><input type="date" id="d1"></div>
+      <div><label class="f">ถึง</label><input type="date" id="d2"></div>
+      <div style="flex:0"><button class="btn" id="btnGo">ดูข้อมูล</button></div>
+      <div style="flex:0"><button class="btn sec" id="btnEx">⬇ Excel</button></div>
+    </div>
+  </div>
+
+  <div class="grid g6" style="margin-bottom:16px">
+    <div class="kpi pink"><div class="l">ค่าแอดรวม</div><div class="v" id="k1">-</div></div>
+    <div class="kpi"><div class="l">ยอดขายจากแอด</div><div class="v" id="k2">-</div></div>
+    <div class="kpi gold"><div class="l">ROAS</div><div class="v" id="k3">-</div></div>
+    <div class="kpi bad"><div class="l">%ค่าแอด</div><div class="v" id="k4">-</div></div>
+    <div class="kpi ok"><div class="l">ออเดอร์</div><div class="v" id="k5">-</div></div>
+    <div class="kpi"><div class="l">CPO เฉลี่ย</div><div class="v" id="k6">-</div></div>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button class="on" data-tab="owner">รายคน</button>
+    <button data-tab="ad_type">ประเภทแอด</button>
+    <button data-tab="campaign">รายแคมเปญ</button>
+    <button data-tab="sku">รายสินค้า</button>
+    <button data-tab="shop">รายร้าน</button>
+    <button data-tab="ym">รายเดือน</button>
+    <button data-tab="daily">รายวัน</button>
+  </div>
+
+  <div class="card">
+    <div id="hint" class="note blue hide" style="margin-bottom:12px"></div>
+    <div id="body"><div class="empty"><span class="spin"></span> กำลังโหลด…</div></div>
+  </div>
+  <div class="foot">MASARU Group — TikTok Team Portal · เอกสารภายใน (ความลับ)</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="assets/common.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let DIM = 'owner', ROWS = [];
+const LABEL = { owner:'ผู้รับผิดชอบ', ad_type:'ประเภทแอด', campaign:'แคมเปญ',
+                sku:'SKU', shop:'ร้านค้า', ym:'เดือน', daily:'วันที่' };
+
+(async function(){
+  if(!await requireAuth()) return;
+  renderTop('ads.html');
+  $('d1').value = monthStartISO(); $('d2').value = todayISO();
+  $('btnGo').onclick = load;
+  $('btnEx').onclick = exportNow;
+  bindTabs('#tabs', t => { DIM = t; load(); });
+  await load();
+})();
+
+async function load(){
+  const f=$('d1').value, t=$('d2').value;
+  $('body').innerHTML = '<div class="empty"><span class="spin"></span> กำลังโหลด…</div>';
+
+  const all = await rpc('f_tt_ads_dim',{ p_from:f, p_to:t, p_dim:'ym' });
+  const S = all.reduce((a,x)=>({ spend:a.spend+ +x.spend, gmv:a.gmv+ +x.gmv, orders:a.orders+ +x.orders }),
+                       { spend:0, gmv:0, orders:0 });
+  $('k1').textContent = '฿'+fmtB0(S.spend);
+  $('k2').textContent = '฿'+fmtB0(S.gmv);
+  $('k3').textContent = fmtX(S.spend? S.gmv/S.spend : 0);
+  $('k4').textContent = S.gmv? fmtPct(S.spend/S.gmv) : '-';
+  $('k5').textContent = fmtN(S.orders);
+  $('k6').textContent = S.orders? '฿'+fmtB(S.spend/S.orders) : '-';
+
+  if(DIM === 'daily'){ await daily(f,t); return; }
+  ROWS = await rpc('f_tt_ads_dim',{ p_from:f, p_to:t, p_dim:DIM });
+  if(!ROWS.length){ $('body').innerHTML = '<div class="empty">ยังไม่มีข้อมูลค่าแอดในช่วงนี้ — อัปโหลดที่หน้า “นำเข้าข้อมูล”</div>'; return; }
+
+  const best = ROWS.filter(r=>+r.spend>0).sort((a,b)=>b.roas-a.roas)[0];
+  const worst= ROWS.filter(r=>+r.spend>0).sort((a,b)=>a.roas-b.roas)[0];
+  $('hint').classList.remove('hide');
+  $('hint').innerHTML = `ROAS สูงสุด: <b>${esc(best?.k||'-')}</b> ${fmtX(best?.roas)} ·
+    ต่ำสุด: <b>${esc(worst?.k||'-')}</b> ${fmtX(worst?.roas)} —
+    เกณฑ์สี: <span class="badge b-ok">≥ 5x ดี</span> <span class="badge b-warn">3–5x เฝ้าดู</span> <span class="badge b-bad">&lt; 3x ต้องแก้</span>`;
+
+  const cols = [
+    { t: LABEL[DIM], k:'k', r:r=>DIM==='ym'? ymTh(r.k) : esc(r.k) },
+    { t:'ค่าแอด', k:'spend', num:1, r:r=>fmtB0(r.spend) },
+    { t:'ยอดขายจากแอด', k:'gmv', num:1, r:r=>fmtB0(r.gmv) },
+    { t:'ออเดอร์', k:'orders', num:1, r:r=>fmtN(r.orders) },
+    { t:'ROAS', k:'roas', num:1, r:r=>`<span class="badge ${cls(r.roas)}">${fmtX(r.roas)}</span>` },
+    { t:'%ค่าแอด', k:'ad_ratio', num:1, r:r=>fmtPct(r.ad_ratio) },
+    { t:'CPO', k:'cpo', num:1, r:r=>fmtB(r.cpo) },
+    { t:'CTR', k:'ctr', num:1, r:r=> r.impressions? fmtPct(r.clicks/r.impressions) : '-' },
+    { t:'สัดส่วนค่าแอด', k:'sh', num:1, r:r=> S.spend? fmtPct(r.spend/S.spend) : '-' }
+  ];
+  const foot = { k:'รวม', spend:fmtB0(S.spend), gmv:fmtB0(S.gmv), orders:fmtN(S.orders),
+                 roas:fmtX(S.spend? S.gmv/S.spend:0), ad_ratio:S.gmv?fmtPct(S.spend/S.gmv):'-',
+                 cpo:S.orders?fmtB(S.spend/S.orders):'-', ctr:'', sh:'100.0%' };
+  $('body').innerHTML = tableHTML(cols, ROWS, foot) +
+    '<canvas id="ch" height="110" style="margin-top:16px"></canvas>';
+  chart(ROWS.slice(0,12));
+}
+const cls = v => +v>=5 ? 'b-ok' : +v>=3 ? 'b-warn' : 'b-bad';
+
+function chart(d){
+  new Chart($('ch'), {
+    data:{ labels:d.map(x=>DIM==='ym'?ymTh(x.k):x.k),
+      datasets:[
+        { type:'bar', label:'ค่าแอด', data:d.map(x=>+x.spend), backgroundColor:'#FE2C55', borderRadius:5, yAxisID:'y' },
+        { type:'bar', label:'ยอดขายจากแอด', data:d.map(x=>+x.gmv), backgroundColor:'#2E75B6', borderRadius:5, yAxisID:'y' },
+        { type:'line', label:'ROAS', data:d.map(x=>+x.roas||0), borderColor:'#C9A84C', backgroundColor:'#C9A84C',
+          tension:.3, yAxisID:'y1', pointRadius:3 }
+      ]},
+    options:{ responsive:true, interaction:{mode:'index',intersect:false},
+      scales:{ y:{ ticks:{ callback:v=>(v/1000).toLocaleString()+'k' } },
+               y1:{ position:'right', grid:{drawOnChartArea:false}, suggestedMin:0,
+                    ticks:{ callback:v=>v.toFixed(1)+'x' } } } }
+  });
+}
+
+async function daily(f,t){
+  const d = await rpc('f_tt_ads_daily',{ p_from:f, p_to:t });
+  if(!d.length){ $('body').innerHTML='<div class="empty">ยังไม่มีข้อมูลในช่วงนี้</div>'; return; }
+  $('hint').classList.add('hide');
+  ROWS = d.map(x=>({ k:x.d, spend:+x.spend, gmv:+x.gmv, orders:+x.orders,
+                     roas:+x.spend? +x.gmv/+x.spend:0, ad_ratio:+x.gmv? +x.spend/+x.gmv:null,
+                     cpo:+x.orders? +x.spend/+x.orders:null }));
+  const cols=[
+    { t:'วันที่', k:'k', r:r=>thDate(r.k) },
+    { t:'ค่าแอด', k:'spend', num:1, r:r=>fmtB0(r.spend) },
+    { t:'ยอดขายจากแอด', k:'gmv', num:1, r:r=>fmtB0(r.gmv) },
+    { t:'ออเดอร์', k:'orders', num:1, r:r=>fmtN(r.orders) },
+    { t:'ROAS', k:'roas', num:1, r:r=>`<span class="badge ${cls(r.roas)}">${fmtX(r.roas)}</span>` },
+    { t:'CPO', k:'cpo', num:1, r:r=>fmtB(r.cpo) }
+  ];
+  $('body').innerHTML = tableHTML(cols, ROWS, { k:'รวม', spend:fmtB0(sum(ROWS,'spend')),
+    gmv:fmtB0(sum(ROWS,'gmv')), orders:fmtN(sum(ROWS,'orders')), roas:'', cpo:'' }) +
+    '<canvas id="ch" height="110" style="margin-top:16px"></canvas>';
+  chart(ROWS);
+}
+
+function exportNow(){
+  if(!ROWS.length) return toast('ไม่มีข้อมูลให้ส่งออก','err');
+  const aoa = [[LABEL[DIM],'ค่าแอด','ยอดขายจากแอด','ออเดอร์','ROAS','%ค่าแอด','CPO']];
+  ROWS.forEach(r=>aoa.push([ DIM==='daily'?thDate(r.k):(DIM==='ym'?ymTh(r.k):r.k),
+    +r.spend||0, +r.gmv||0, +r.orders||0, +r.roas||0, +r.ad_ratio||0, +r.cpo||0 ]));
+  exportXLSX([{ name:'ค่าแอด-'+DIM, aoa }], `ค่าแอด_TikTok_${DIM}_${$('d1').value}_${$('d2').value}.xlsx`);
+}
+</script>
+</body>
+</html>

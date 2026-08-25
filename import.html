@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>นำเข้าข้อมูล — MASARU TikTok</title>
+<link rel="stylesheet" href="assets/style.css">
+<style>
+.drop{border:2px dashed #c9d6ea;border-radius:15px;padding:34px;text-align:center;background:#fbfcff;cursor:pointer}
+.drop:hover,.drop.over{border-color:var(--blue);background:#f2f7fd}
+.sheet{display:flex;align-items:center;gap:11px;padding:10px 12px;border:1px solid var(--line);
+  border-radius:11px;margin-bottom:8px;background:#fff}
+.sheet input[type=checkbox]{width:17px;height:17px;flex:0 0 17px}
+.sheet select{width:auto;min-width:140px;margin-left:auto}
+</style>
+</head>
+<body>
+<header class="top" id="top"></header>
+<div class="wrap">
+  <div class="page-h">
+    <div><h1>📥 นำเข้าข้อมูล</h1><p>อัปโหลดไฟล์ Excel ยอดขาย / ค่าใช้จ่าย / ค่าแอด — ระบบจับหัวคอลัมน์ให้อัตโนมัติ</p></div>
+  </div>
+
+  <div id="noPerm" class="note red hide">🔒 เฉพาะหัวหน้าทีมเท่านั้นที่นำเข้าข้อมูลได้ (สิทธิ์ล็อกที่ฐานข้อมูล)</div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>1️⃣ เลือกไฟล์</h3>
+      <div class="drop" id="drop">
+        <div style="font-size:32px">📄</div>
+        <b>ลากไฟล์มาวาง หรือคลิกเพื่อเลือก</b>
+        <div style="color:var(--muted);font-size:13px;margin-top:5px">.xlsx / .xls / .csv</div>
+      </div>
+      <input type="file" id="file" accept=".xlsx,.xls,.csv" class="hide">
+      <div id="sheets" style="margin-top:14px"></div>
+      <div id="actions" class="hide" style="margin-top:12px;display:flex;gap:9px">
+        <button class="btn" id="btnPre">ตรวจข้อมูลก่อนนำเข้า</button>
+        <button class="btn gold hide" id="btnImp">ยืนยันนำเข้า</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>📋 หัวคอลัมน์ที่ระบบรู้จัก</h3>
+      <div class="note blue" style="margin-bottom:10px">
+        ถ้าไฟล์ทีมใช้ชื่อคอลัมน์อื่น แจ้งชื่อจริงมาได้เลย เดี๋ยวเพิ่มให้ในระบบ (ไฟล์ <code>assets/parsers.js</code>)
+      </div>
+      <div id="aliasBox" style="font-size:12.5px;max-height:360px;overflow:auto"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>2️⃣ ผลการตรวจ</h3>
+    <div id="preview"><div class="empty">ยังไม่ได้เลือกไฟล์</div></div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>🕘 ประวัตินำเข้า</h3>
+    <div id="hist"><div class="empty"><span class="spin"></span></div></div>
+  </div>
+  <div class="foot">MASARU Group — TikTok Team Portal · เอกสารภายใน (ความลับ)</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="assets/common.js"></script>
+<script src="assets/parsers.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let WB = null, FILE = '', PARSED = [];
+
+(async function(){
+  if(!await requireAuth()) return;
+  renderTop('import.html');
+  if(!isHead()){ $('noPerm').classList.remove('hide'); }
+  $('aliasBox').innerHTML = Object.entries(ALIAS).map(([k,v])=>
+    `<div style="margin-bottom:9px"><b>${({sales:'ยอดขาย',expense:'ค่าใช้จ่าย',ads:'ค่าแอด'})[k]}</b>` +
+    Object.entries(v).map(([f,names])=>
+      `<div style="color:var(--muted);margin-left:8px">• ${f}: ${names.slice(0,5).map(esc).join(' / ')}</div>`).join('')+'</div>').join('');
+
+  $('drop').onclick = () => $('file').click();
+  $('drop').ondragover = e => { e.preventDefault(); $('drop').classList.add('over'); };
+  $('drop').ondragleave = () => $('drop').classList.remove('over');
+  $('drop').ondrop = e => { e.preventDefault(); $('drop').classList.remove('over');
+    if(e.dataTransfer.files[0]) readFile(e.dataTransfer.files[0]); };
+  $('file').onchange = e => e.target.files[0] && readFile(e.target.files[0]);
+  $('btnPre').onclick = preview;
+  $('btnImp').onclick = doImport;
+  await history();
+})();
+
+function readFile(f){
+  FILE = f.name;
+  const fr = new FileReader();
+  fr.onload = e => {
+    WB = XLSX.read(e.target.result, { type:'array', cellDates:true });
+    const sc = scanWorkbook(WB);
+    $('sheets').innerHTML = '<label class="f">เลือกชีทและระบุชนิดข้อมูล</label>' + sc.map((s,i)=>`
+      <div class="sheet">
+        <input type="checkbox" id="s${i}" ${s.kind?'checked':''} data-name="${esc(s.name)}">
+        <div><b>${esc(s.name)}</b><div style="font-size:12px;color:var(--muted)">${fmtN(s.rows)} แถว${s.month?' · เดือน '+s.month:''}</div></div>
+        <select id="k${i}">
+          <option value="">— ไม่นำเข้า —</option>
+          <option value="sales" ${s.kind==='sales'?'selected':''}>ยอดขาย</option>
+          <option value="expense" ${s.kind==='expense'?'selected':''}>ค่าใช้จ่าย</option>
+          <option value="ads" ${s.kind==='ads'?'selected':''}>ค่าแอด</option>
+        </select>
+      </div>`).join('');
+    $('actions').classList.remove('hide');
+    $('btnImp').classList.add('hide');
+    $('preview').innerHTML = '<div class="empty">กด “ตรวจข้อมูลก่อนนำเข้า”</div>';
+    toast('อ่านไฟล์แล้ว '+sc.length+' ชีท','ok');
+  };
+  fr.readAsArrayBuffer(f);
+}
+
+function preview(){
+  PARSED = [];
+  const boxes = [...document.querySelectorAll('.sheet')];
+  boxes.forEach((b,i)=>{
+    const cb = $('s'+i), kind = $('k'+i).value;
+    if(!cb.checked || !kind) return;
+    const name = cb.dataset.name;
+    const year = new Date().getFullYear();
+    PARSED.push(parseSheet(WB, name, kind, { year }));
+  });
+  if(!PARSED.length){ $('preview').innerHTML='<div class="empty">ยังไม่ได้เลือกชีท</div>'; return; }
+
+  $('preview').innerHTML = PARSED.map(p=>{
+    if(!p.ok) return `<div class="note red" style="margin-bottom:11px">❌ <b>${esc(p.sheet)}</b> — ${esc(p.error)}</div>`;
+    const miss = (p.missing||[]).length ? `<div class="note" style="margin:8px 0">⚠️ ไม่พบคอลัมน์: ${p.missing.join(', ')}</div>` : '';
+    const head = Object.keys(p.rows[0]||{});
+    const rows = p.rows.slice(0,5);
+    return `<div style="margin-bottom:18px">
+      <b>📄 ${esc(p.sheet)}</b> <span class="badge b-info">${({sales:'ยอดขาย',expense:'ค่าใช้จ่าย',ads:'ค่าแอด'})[p.kind]}</span>
+      <span style="color:var(--muted);font-size:13px"> — อ่านได้ ${fmtN(p.rows.length)} แถว · ข้าม ${fmtN(p.skipped.length)} แถว · หัวตารางแถวที่ ${p.headerRow}</span>
+      ${miss}
+      ${p.skipped.length?`<div style="font-size:12px;color:var(--muted);margin:5px 0">ข้าม: ${p.skipped.slice(0,5).map(s=>'แถว '+s.row+' ('+s.reason+')').join(', ')}${p.skipped.length>5?' …':''}</div>`:''}
+      ${rows.length?`<div class="tbl-wrap" style="margin-top:7px"><table><thead><tr>${head.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead>
+        <tbody>${rows.map(r=>`<tr>${head.map(h=>`<td>${esc(r[h]??'-')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`:'<div class="empty">ไม่มีแถวที่ใช้ได้</div>'}
+    </div>`;
+  }).join('');
+  const total = PARSED.filter(p=>p.ok).reduce((a,p)=>a+p.rows.length,0);
+  if(total && isHead()) $('btnImp').classList.remove('hide');
+  $('btnImp').textContent = `ยืนยันนำเข้า ${fmtN(total)} แถว`;
+}
+
+async function doImport(){
+  if(!isHead()) return toast('ไม่มีสิทธิ์นำเข้าข้อมูล','err');
+  $('btnImp').disabled = true;
+  let ok = 0;
+  for(const p of PARSED.filter(x=>x.ok && x.rows.length)){
+    const table = { sales:'tt_sales', expense:'tt_expense', ads:'tt_ads' }[p.kind];
+    const rows = p.rows.map(r=>({ ...r, source_file: FILE + ' / ' + p.sheet }));
+    for(let i=0;i<rows.length;i+=500){
+      const { error } = await sb.from(table).insert(rows.slice(i,i+500));
+      if(error){ toast('นำเข้าไม่สำเร็จ: '+error.message,'err'); $('btnImp').disabled=false; return; }
+    }
+    await sb.from('tt_imports').insert({ kind:p.kind, file_name:FILE, sheet_name:p.sheet,
+      rows:rows.length, imported_by: ME.name });
+    ok += rows.length;
+  }
+  cacheClear();
+  $('btnImp').disabled = false;
+  toast('นำเข้าสำเร็จ '+fmtN(ok)+' แถว','ok');
+  await history();
+}
+
+async function history(){
+  const { data } = await sb.from('tt_imports').select('*').order('created_at',{ascending:false}).limit(30);
+  const rows = data||[];
+  $('hist').innerHTML = tableHTML([
+    { t:'เวลา', k:'created_at', r:r=>thDate(r.created_at)+' '+new Date(r.created_at).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}) },
+    { t:'ชนิด', k:'kind', r:r=>`<span class="badge b-info">${({sales:'ยอดขาย',expense:'ค่าใช้จ่าย',ads:'ค่าแอด'})[r.kind]||r.kind}</span>` },
+    { t:'ไฟล์', k:'file_name' }, { t:'ชีท', k:'sheet_name' },
+    { t:'แถว', k:'rows', num:1, r:r=>fmtN(r.rows) }, { t:'ผู้นำเข้า', k:'imported_by' }
+  ], rows);
+}
+</script>
+</body>
+</html>

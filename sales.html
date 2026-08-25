@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ยอดขาย — MASARU TikTok</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="top" id="top"></header>
+<div class="wrap">
+  <div class="page-h">
+    <div><h1>🛒 ยอดขาย TikTok</h1><p>ภาพรวมยอดขาย แยกตามมิติต่าง ๆ</p></div>
+    <div style="margin-left:auto" class="row">
+      <div><label class="f">ตั้งแต่</label><input type="date" id="d1"></div>
+      <div><label class="f">ถึง</label><input type="date" id="d2"></div>
+      <div style="flex:0"><button class="btn" id="btnGo">ดูข้อมูล</button></div>
+      <div style="flex:0"><button class="btn sec" id="btnEx">⬇ Excel</button></div>
+    </div>
+  </div>
+
+  <div class="grid g4" style="margin-bottom:16px">
+    <div class="kpi"><div class="l">ยอดขายรวม</div><div class="v" id="k1">-</div></div>
+    <div class="kpi ok"><div class="l">จำนวนออเดอร์</div><div class="v" id="k2">-</div></div>
+    <div class="kpi gold"><div class="l">ยอดเฉลี่ย/ออเดอร์ (AOV)</div><div class="v" id="k3">-</div></div>
+    <div class="kpi pink"><div class="l">จำนวนชิ้นที่ขาย</div><div class="v" id="k4">-</div></div>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button class="on" data-tab="daily">รายวัน</button>
+    <button data-tab="ym">รายเดือน</button>
+    <button data-tab="sku">รายสินค้า (SKU)</button>
+    <button data-tab="shop">รายร้าน</button>
+    <button data-tab="staff">รายคน</button>
+  </div>
+
+  <div class="card">
+    <div id="body"><div class="empty"><span class="spin"></span> กำลังโหลด…</div></div>
+  </div>
+  <div class="foot">MASARU Group — TikTok Team Portal · เอกสารภายใน (ความลับ)</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="assets/common.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let DIM='daily', ROWS=[];
+const LABEL = { daily:'วันที่', ym:'เดือน', sku:'SKU', shop:'ร้านค้า', staff:'ผู้รับผิดชอบ' };
+
+(async function(){
+  if(!await requireAuth()) return;
+  renderTop('sales.html');
+  $('d1').value = monthStartISO(); $('d2').value = todayISO();
+  $('btnGo').onclick = load; $('btnEx').onclick = exportNow;
+  bindTabs('#tabs', t => { DIM=t; load(); });
+  await load();
+})();
+
+async function load(){
+  const f=$('d1').value, t=$('d2').value;
+  $('body').innerHTML='<div class="empty"><span class="spin"></span> กำลังโหลด…</div>';
+  const [o] = await rpc('f_tt_overview',{ p_from:f, p_to:t });
+  const dimAll = await rpc('f_tt_sales_dim',{ p_from:f, p_to:t, p_dim:'sku' });
+  const qty = dimAll.reduce((a,x)=>a+(+x.qty||0),0);
+  $('k1').textContent = '฿'+fmtB0(o?.sales);
+  $('k2').textContent = fmtN(o?.sales_orders);
+  $('k3').textContent = o?.sales_orders ? '฿'+fmtB0(o.sales/o.sales_orders) : '-';
+  $('k4').textContent = fmtN(qty);
+
+  if(DIM==='daily'){
+    const d = await rpc('f_tt_sales_daily',{ p_from:f, p_to:t });
+    ROWS = d.map(x=>({ k:x.d, amount:+x.amount, orders:+x.orders, qty:null }));
+    render(r=>thDate(r.k)); return;
+  }
+  if(DIM==='ym'){
+    const d = await rpc('f_tt_sales_monthly',{});
+    ROWS = d.map(x=>({ k:x.ym, amount:+x.amount, orders:+x.orders, qty:+x.qty }));
+    render(r=>ymTh(r.k)); return;
+  }
+  const d = await rpc('f_tt_sales_dim',{ p_from:f, p_to:t, p_dim:DIM });
+  ROWS = d.map(x=>({ k:x.k, amount:+x.amount, orders:+x.orders, qty:+x.qty }));
+  render(r=>esc(r.k));
+}
+
+function render(kFmt){
+  if(!ROWS.length){ $('body').innerHTML='<div class="empty">ยังไม่มีข้อมูลยอดขายในช่วงนี้ — อัปโหลดที่หน้า “นำเข้าข้อมูล”</div>'; return; }
+  const tot = sum(ROWS,'amount');
+  const cols=[
+    { t:LABEL[DIM], k:'k', r:kFmt },
+    { t:'ยอดขาย (บาท)', k:'amount', num:1, r:r=>fmtB0(r.amount) },
+    { t:'ออเดอร์', k:'orders', num:1, r:r=>fmtN(r.orders) },
+    { t:'ชิ้น', k:'qty', num:1, r:r=>r.qty==null?'-':fmtN(r.qty) },
+    { t:'AOV', k:'aov', num:1, r:r=>r.orders?fmtB0(r.amount/r.orders):'-' },
+    { t:'สัดส่วน', k:'sh', num:1, r:r=>tot?fmtPct(r.amount/tot):'-' }
+  ];
+  $('body').innerHTML = tableHTML(cols, ROWS, { k:'รวม', amount:fmtB0(tot),
+    orders:fmtN(sum(ROWS,'orders')), qty:fmtN(sum(ROWS,'qty')), aov:'', sh:'100.0%' }) +
+    '<canvas id="ch" height="110" style="margin-top:16px"></canvas>';
+  const d = ROWS.slice(0, DIM==='daily'?60:15);
+  new Chart($('ch'), {
+    type: DIM==='daily'?'line':'bar',
+    data:{ labels:d.map(x=>DIM==='ym'?ymTh(x.k):(DIM==='daily'?thDate(x.k):x.k)),
+      datasets:[{ label:'ยอดขาย (บาท)', data:d.map(x=>x.amount), backgroundColor:'#2E75B6',
+        borderColor:'#2E75B6', borderRadius:5, tension:.3, fill:false }]},
+    options:{ plugins:{legend:{display:false}},
+      scales:{ y:{ ticks:{ callback:v=>(v/1000).toLocaleString()+'k' } } } }
+  });
+}
+
+function exportNow(){
+  if(!ROWS.length) return toast('ไม่มีข้อมูลให้ส่งออก','err');
+  const aoa=[[LABEL[DIM],'ยอดขาย','ออเดอร์','ชิ้น','AOV']];
+  ROWS.forEach(r=>aoa.push([ DIM==='daily'?thDate(r.k):(DIM==='ym'?ymTh(r.k):r.k),
+    r.amount||0, r.orders||0, r.qty||0, r.orders? r.amount/r.orders : 0 ]));
+  exportXLSX([{ name:'ยอดขาย-'+DIM, aoa }], `ยอดขาย_TikTok_${DIM}_${$('d1').value}_${$('d2').value}.xlsx`);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ค่าใช้จ่าย — MASARU TikTok</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="top" id="top"></header>
+<div class="wrap">
+  <div class="page-h">
+    <div><h1>💸 ค่าใช้จ่ายทีม TikTok</h1><p>แยกตามหมวด · เดือน · ผู้รับผิดชอบ พร้อมเทียบกับยอดขาย</p></div>
+    <div style="margin-left:auto" class="row">
+      <div><label class="f">ตั้งแต่</label><input type="date" id="d1"></div>
+      <div><label class="f">ถึง</label><input type="date" id="d2"></div>
+      <div style="flex:0"><button class="btn" id="btnGo">ดูข้อมูล</button></div>
+      <div style="flex:0"><button class="btn sec" id="btnEx">⬇ Excel</button></div>
+    </div>
+  </div>
+
+  <div class="grid g4" style="margin-bottom:16px">
+    <div class="kpi bad"><div class="l">ค่าใช้จ่ายรวม</div><div class="v" id="k1">-</div></div>
+    <div class="kpi pink"><div class="l">ค่าแอด</div><div class="v" id="k2">-</div><div class="s" id="k2s">จากระบบค่าแอด</div></div>
+    <div class="kpi"><div class="l">%ค่าใช้จ่าย/ยอดขาย</div><div class="v" id="k3">-</div></div>
+    <div class="kpi ok"><div class="l">ยอดขายรวม</div><div class="v" id="k4">-</div></div>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button class="on" data-tab="category">แยกหมวด</button>
+    <button data-tab="ym">รายเดือน</button>
+    <button data-tab="staff">รายคน</button>
+    <button data-tab="shop">รายร้าน</button>
+    <button data-tab="list">รายการทั้งหมด</button>
+  </div>
+
+  <div class="card">
+    <div id="warn"></div>
+    <div id="body"><div class="empty"><span class="spin"></span> กำลังโหลด…</div></div>
+  </div>
+  <div class="foot">MASARU Group — TikTok Team Portal · เอกสารภายใน (ความลับ)</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="assets/common.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let DIM='category', ROWS=[];
+const LABEL={ category:'หมวดค่าใช้จ่าย', ym:'เดือน', staff:'ผู้รับผิดชอบ', shop:'ร้านค้า' };
+
+(async function(){
+  if(!await requireAuth()) return;
+  renderTop('expense.html');
+  $('d1').value = monthStartISO(); $('d2').value = todayISO();
+  $('btnGo').onclick = load; $('btnEx').onclick = exportNow;
+  bindTabs('#tabs', t => { DIM=t; load(); });
+  await load();
+})();
+
+async function load(){
+  const f=$('d1').value, t=$('d2').value;
+  $('body').innerHTML='<div class="empty"><span class="spin"></span> กำลังโหลด…</div>';
+  const [o] = await rpc('f_tt_overview',{ p_from:f, p_to:t });
+  $('k1').textContent='฿'+fmtB0(o?.expense);
+  $('k2').textContent='฿'+fmtB0(o?.ad_spend);
+  $('k3').textContent = o?.sales ? fmtPct(o.expense/o.sales) : '-';
+  $('k4').textContent='฿'+fmtB0(o?.sales);
+
+  // เตือนถ้าค่าแอดในตารางค่าใช้จ่ายอาจซ้ำกับระบบค่าแอด
+  const cat = await rpc('f_tt_expense_dim',{ p_from:f, p_to:t, p_dim:'category' });
+  const adCat = cat.filter(c=>/แอด|โฆษณา|ads?/i.test(c.k));
+  $('warn').innerHTML = (adCat.length && +o?.ad_spend > 0)
+    ? `<div class="note" style="margin-bottom:12px">⚠️ หมวด “${esc(adCat[0].k)}” ในค่าใช้จ่าย ฿${fmtB0(adCat[0].amount)}
+       กับค่าแอดในระบบค่าแอด ฿${fmtB0(o.ad_spend)} — ถ้าเป็นเงินก้อนเดียวกัน อย่านับซ้ำตอนสรุปกำไร</div>` : '';
+
+  if(DIM==='list'){ await listView(f,t); return; }
+  const d = await rpc('f_tt_expense_dim',{ p_from:f, p_to:t, p_dim:DIM });
+  ROWS = d.map(x=>({ k:x.k, amount:+x.amount, cnt:+x.cnt }));
+  if(!ROWS.length){ $('body').innerHTML='<div class="empty">ยังไม่มีข้อมูลค่าใช้จ่ายในช่วงนี้ — อัปโหลดที่หน้า “นำเข้าข้อมูล”</div>'; return; }
+  const tot=sum(ROWS,'amount');
+  const cols=[
+    { t:LABEL[DIM], k:'k', r:r=>DIM==='ym'?ymTh(r.k):esc(r.k) },
+    { t:'จำนวนเงิน (บาท)', k:'amount', num:1, r:r=>fmtB0(r.amount) },
+    { t:'จำนวนรายการ', k:'cnt', num:1, r:r=>fmtN(r.cnt) },
+    { t:'เฉลี่ย/รายการ', k:'avg', num:1, r:r=>r.cnt?fmtB0(r.amount/r.cnt):'-' },
+    { t:'สัดส่วน', k:'sh', num:1, r:r=>tot?fmtPct(r.amount/tot):'-' }
+  ];
+  $('body').innerHTML = tableHTML(cols, ROWS, { k:'รวม', amount:fmtB0(tot), cnt:fmtN(sum(ROWS,'cnt')), avg:'', sh:'100.0%' })
+    + '<canvas id="ch" height="110" style="margin-top:16px"></canvas>';
+  const d2 = ROWS.slice(0,12);
+  new Chart($('ch'), {
+    type: DIM==='ym'?'bar':'doughnut',
+    data:{ labels:d2.map(x=>DIM==='ym'?ymTh(x.k):x.k),
+      datasets:[{ label:'บาท', data:d2.map(x=>x.amount),
+        backgroundColor:['#1F3864','#2E75B6','#C9A84C','#FE2C55','#25F4EE','#16a34a','#d97706','#7c3aed','#0891b2','#be123c','#65a30d','#94a3b8'] }]},
+    options:{ plugins:{ legend:{ position: DIM==='ym'?'top':'right', display: DIM!=='ym' } },
+      scales: DIM==='ym' ? { y:{ ticks:{ callback:v=>(v/1000).toLocaleString()+'k' } } } : {} }
+  });
+}
+
+async function listView(f,t){
+  const { data, error } = await sb.from('tt_expense').select('*')
+    .gte('exp_date',f).lte('exp_date',t).order('exp_date',{ascending:false}).limit(1000);
+  if(error){ toast(error.message,'err'); return; }
+  ROWS = (data||[]).map(x=>({ k:x.exp_date, category:x.category, detail:x.detail,
+    staff:x.staff, shop:x.shop, amount:+x.amount, cnt:1, note:x.note }));
+  const cols=[
+    { t:'วันที่', k:'k', r:r=>thDate(r.k) },
+    { t:'หมวด', k:'category' }, { t:'รายละเอียด', k:'detail' },
+    { t:'ร้าน', k:'shop' }, { t:'ผู้รับผิดชอบ', k:'staff' },
+    { t:'จำนวนเงิน', k:'amount', num:1, r:r=>fmtB0(r.amount) },
+    { t:'หมายเหตุ', k:'note' }
+  ];
+  $('body').innerHTML = tableHTML(cols, ROWS, { k:'รวม', amount:fmtB0(sum(ROWS,'amount')) }) +
+    '<div class="foot" style="text-align:left">แสดงสูงสุด 1,000 รายการล่าสุดในช่วงที่เลือก</div>';
+}
+
+function exportNow(){
+  if(!ROWS.length) return toast('ไม่มีข้อมูลให้ส่งออก','err');
+  const aoa = DIM==='list'
+    ? [['วันที่','หมวด','รายละเอียด','ร้าน','ผู้รับผิดชอบ','จำนวนเงิน','หมายเหตุ'],
+       ...ROWS.map(r=>[thDate(r.k), r.category, r.detail, r.shop, r.staff, r.amount||0, r.note])]
+    : [[LABEL[DIM],'จำนวนเงิน','จำนวนรายการ'],
+       ...ROWS.map(r=>[ DIM==='ym'?ymTh(r.k):r.k, r.amount||0, r.cnt||0 ])];
+  exportXLSX([{ name:'ค่าใช้จ่าย-'+DIM, aoa }], `ค่าใช้จ่าย_TikTok_${DIM}_${$('d1').value}_${$('d2').value}.xlsx`);
+}
+</script>
+</body>
+</html>

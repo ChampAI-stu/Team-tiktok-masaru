@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MASARU TikTok Portal</title>
+<link rel="stylesheet" href="assets/style.css">
+<style>
+.login-bg{min-height:100vh;display:grid;place-items:center;padding:20px;
+  background:radial-gradient(1200px 600px at 20% 0%,#27406e 0%,#1F3864 45%,#12203a 100%)}
+.login{width:100%;max-width:400px;background:#fff;border-radius:18px;padding:26px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+.login .logo{display:flex;align-items:center;gap:11px;margin-bottom:18px}
+.login .logo .dot{width:40px;height:40px;border-radius:12px;background:#FE2C55;box-shadow:-5px 0 0 #25F4EE;display:grid;place-items:center;font-size:19px}
+.login h2{margin:0;font-size:19px;color:#1F3864}.login h2 small{display:block;font-size:12px;color:#6b7280;font-weight:400}
+.login .f-row{margin-bottom:11px}
+.sw{text-align:center;font-size:13px;color:#6b7280;margin-top:13px}
+.sw a{color:#2E75B6;font-weight:600;cursor:pointer}
+.qcard{display:block;background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:var(--sh);transition:.15s}
+.qcard:hover{transform:translateY(-2px);border-color:var(--blue)}
+.qcard .ic{font-size:22px}.qcard b{display:block;margin-top:6px;font-size:15px}
+.qcard span{font-size:12.5px;color:var(--muted)}
+.bar{height:9px;background:#eef1f7;border-radius:9px;overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--blue)}
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<div id="loginView" class="login-bg hide">
+  <div class="login">
+    <div class="logo"><span class="dot">🎵</span>
+      <h2>MASARU TikTok<small>ระบบข้อมูลทีม TikTok</small></h2></div>
+
+    <div id="paneIn">
+      <div class="f-row"><label class="f">อีเมล</label><input id="inEmail" type="email" autocomplete="username"></div>
+      <div class="f-row"><label class="f">รหัสผ่าน</label><input id="inPass" type="password" autocomplete="current-password"></div>
+      <button class="btn" style="width:100%" id="btnIn">เข้าสู่ระบบ</button>
+      <div class="sw">ยังไม่มีบัญชี? <a onclick="swap('up')">สมัครด้วยรหัสเชิญ</a></div>
+    </div>
+
+    <div id="paneUp" class="hide">
+      <div class="f-row"><label class="f">ชื่อ–สกุล / ชื่อเล่น</label><input id="upName"></div>
+      <div class="f-row"><label class="f">อีเมล</label><input id="upEmail" type="email"></div>
+      <div class="f-row"><label class="f">รหัสผ่าน (อย่างน้อย 6 ตัว)</label><input id="upPass" type="password"></div>
+      <div class="f-row"><label class="f">รหัสเชิญ</label><input id="upCode" placeholder="รับจากหัวหน้าทีม"></div>
+      <button class="btn" style="width:100%" id="btnUp">สมัครสมาชิก</button>
+      <div class="sw">มีบัญชีแล้ว? <a onclick="swap('in')">เข้าสู่ระบบ</a></div>
+    </div>
+    <div class="foot" style="margin-top:18px">MASARU Group · ใช้ภายในองค์กร</div>
+  </div>
+</div>
+
+<!-- ============ HOME ============ -->
+<div id="homeView" class="hide">
+<header class="top" id="top"></header>
+<div class="wrap">
+  <div class="page-h">
+    <div><h1>ภาพรวมทีม TikTok</h1><p id="rangeTxt">กำลังโหลด…</p></div>
+    <div style="margin-left:auto" class="row">
+      <div><label class="f">ตั้งแต่</label><input type="date" id="d1"></div>
+      <div><label class="f">ถึง</label><input type="date" id="d2"></div>
+      <div style="flex:0"><button class="btn" id="btnGo">ดูข้อมูล</button></div>
+    </div>
+  </div>
+
+  <div id="warnBox"></div>
+
+  <div class="grid g4" style="margin-bottom:16px">
+    <div class="kpi"><div class="l">ยอดขายรวม</div><div class="v" id="k1">-</div><div class="s" id="k1s">ทุกช่องทาง TikTok</div></div>
+    <div class="kpi bad"><div class="l">ค่าใช้จ่ายรวม</div><div class="v" id="k2">-</div><div class="s" id="k2s">รวมค่าแอด</div></div>
+    <div class="kpi pink"><div class="l">ค่าแอด</div><div class="v" id="k3">-</div><div class="s" id="k3s">-</div></div>
+    <div class="kpi gold"><div class="l">ROAS จากแอด</div><div class="v" id="k4">-</div><div class="s" id="k4s">ยอดขายจากแอด ÷ ค่าแอด</div></div>
+  </div>
+
+  <div class="grid g2" style="margin-bottom:16px">
+    <div class="card"><h3>📈 ยอดขายรายเดือน</h3><canvas id="chMonth" height="150"></canvas></div>
+    <div class="card"><h3>💸 สัดส่วนค่าใช้จ่าย</h3><div id="expTop"></div></div>
+  </div>
+
+  <h3 style="margin:22px 0 10px;font-size:16px">ระบบย่อย</h3>
+  <div class="grid g4">
+    <a class="qcard" href="sales.html"><div class="ic">🛒</div><b>ยอดขาย</b><span>รายวัน · รายสินค้า · รายคน</span></a>
+    <a class="qcard" href="expense.html"><div class="ic">💸</div><b>ค่าใช้จ่าย</b><span>แยกหมวด · รายเดือน</span></a>
+    <a class="qcard" href="ads.html"><div class="ic">📣</div><b>วิเคราะห์ค่าแอด</b><span>ROAS · CPO · รายคน</span></a>
+    <a class="qcard" href="tutorial.html"><div class="ic">📚</div><b>Tutorial / Flow</b><span>ขั้นตอนการทำงาน</span></a>
+  </div>
+  <div class="foot">MASARU Group — TikTok Team Portal · เอกสารภายใน (ความลับ)</div>
+</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="assets/common.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+function swap(w){ $('paneIn').classList.toggle('hide', w==='up'); $('paneUp').classList.toggle('hide', w!=='up'); }
+
+(async function boot(){
+  const { data:{ session } } = await sb.auth.getSession();
+  if(!session){ $('loginView').classList.remove('hide'); return; }
+  await requireAuth();
+  $('homeView').classList.remove('hide');
+  renderTop('index.html');
+  $('d1').value = monthStartISO(); $('d2').value = todayISO();
+  $('btnGo').onclick = load;
+  await load(); await monthChart();
+})();
+
+$('btnIn').onclick = async () => {
+  const email = $('inEmail').value.trim(), password = $('inPass').value;
+  if(!email || !password) return toast('กรอกอีเมลและรหัสผ่าน','err');
+  $('btnIn').disabled = true;
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  $('btnIn').disabled = false;
+  if(error) return toast('เข้าสู่ระบบไม่สำเร็จ: '+error.message,'err');
+  location.reload();
+};
+
+$('btnUp').onclick = async () => {
+  const name=$('upName').value.trim(), email=$('upEmail').value.trim(),
+        password=$('upPass').value, code=$('upCode').value.trim();
+  if(!name||!email||password.length<6) return toast('กรอกข้อมูลให้ครบ รหัสผ่านอย่างน้อย 6 ตัว','err');
+  const role = code===CFG.invite.head ? 'head' : code===CFG.invite.staff ? 'staff' : null;
+  if(!role) return toast('รหัสเชิญไม่ถูกต้อง','err');
+  $('btnUp').disabled = true;
+  const { error } = await sb.auth.signUp({ email, password, options:{ data:{ full_name:name, role } } });
+  $('btnUp').disabled = false;
+  if(error) return toast('สมัครไม่สำเร็จ: '+error.message,'err');
+  toast('สมัครสำเร็จ กำลังเข้าสู่ระบบ…','ok');
+  await sb.auth.signInWithPassword({ email, password });
+  location.reload();
+};
+
+async function load(){
+  const f=$('d1').value, t=$('d2').value;
+  const [o] = await rpc('f_tt_overview',{ p_from:f, p_to:t });
+  const r = o || {};
+  $('k1').textContent = '฿'+fmtB0(r.sales);
+  $('k1s').textContent = fmtN(r.sales_orders)+' ออเดอร์';
+  $('k2').textContent = '฿'+fmtB0(r.expense);
+  $('k3').textContent = '฿'+fmtB0(r.ad_spend);
+  $('k3s').textContent = r.sales>0 ? 'คิดเป็น '+fmtPct(r.ad_spend/r.sales)+' ของยอดขาย' : '-';
+  const roas = r.ad_spend>0 ? r.ad_gmv/r.ad_spend : 0;
+  $('k4').textContent = fmtX(roas);
+  $('k4s').textContent = 'ยอดขายจากแอด ฿'+fmtB0(r.ad_gmv);
+
+  const rg = await rpc('f_tt_range',{});
+  const map = Object.fromEntries(rg.map(x=>[x.src,x]));
+  $('rangeTxt').textContent =
+    `ยอดขาย ${fmtN(map.sales?.rows||0)} แถว · ค่าใช้จ่าย ${fmtN(map.expense?.rows||0)} แถว · ค่าแอด ${fmtN(map.ads?.rows||0)} แถว`;
+  const empty = !(map.sales?.rows||map.expense?.rows||map.ads?.rows);
+  $('warnBox').innerHTML = empty
+    ? '<div class="note" style="margin-bottom:14px">📥 <b>ยังไม่มีข้อมูลในระบบ</b> — ไปที่หน้า “นำเข้าข้อมูล” เพื่ออัปโหลดไฟล์ยอดขาย / ค่าใช้จ่าย / ค่าแอด</div>' : '';
+
+  const ex = await rpc('f_tt_expense_dim',{ p_from:f, p_to:t, p_dim:'category' });
+  const tot = ex.reduce((a,x)=>a+Number(x.amount||0),0);
+  $('expTop').innerHTML = ex.length ? ex.slice(0,7).map(x=>`
+    <div style="margin-bottom:9px">
+      <div style="display:flex;font-size:13px"><span>${esc(x.k)}</span>
+        <span style="margin-left:auto;font-weight:600">฿${fmtB0(x.amount)}</span>
+        <span style="width:52px;text-align:right;color:var(--muted)">${tot?fmtPct(x.amount/tot):'-'}</span></div>
+      <div class="bar"><i style="width:${tot?(x.amount/tot*100):0}%"></i></div>
+    </div>`).join('') : '<div class="empty">ยังไม่มีข้อมูลค่าใช้จ่าย</div>';
+}
+
+async function monthChart(){
+  const d = await rpc('f_tt_sales_monthly',{});
+  new Chart($('chMonth'), {
+    type:'bar',
+    data:{ labels:d.map(x=>ymTh(x.ym)),
+      datasets:[{ label:'ยอดขาย (บาท)', data:d.map(x=>Number(x.amount)), backgroundColor:'#2E75B6', borderRadius:5 }]},
+    options:{ plugins:{ legend:{display:false} },
+      scales:{ y:{ ticks:{ callback:v=>(v/1000).toLocaleString()+'k' } } } }
+  });
+}
+</script>
+</body>
+</html>
